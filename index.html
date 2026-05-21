@@ -340,8 +340,21 @@
 
                     <div>
                         <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Category</label>
-                        <input type="text" id="modal-task-category" required placeholder="e.g., Personal Project" list="existing-categories" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-3 text-sm focus:border-indigo-500 outline-none text-slate-100 placeholder-slate-600">
-                        <datalist id="existing-categories"></datalist>
+                        <div class="relative">
+                            <input type="text" id="modal-task-category" required placeholder="e.g., Personal Project" class="w-full bg-slate-900 border border-slate-800 rounded-xl pl-4 pr-10 py-3 text-sm focus:border-indigo-500 outline-none text-slate-100 placeholder-slate-600" autocomplete="off">
+                            <!-- Toggle Button for Custom Combobox Dropdown -->
+                            <button type="button" onclick="toggleCategoryDropdown(event)" class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-white transition-colors focus:outline-none" title="Select Category">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </button>
+                            <!-- Custom Floating Category Dropdown list -->
+                            <div id="category-dropdown" class="hidden absolute z-50 left-0 right-0 mt-2 max-h-48 overflow-y-auto bg-slate-950 border border-slate-850 rounded-xl shadow-2xl backdrop-blur-md">
+                                <ul id="category-dropdown-list" class="py-1 text-xs text-slate-300">
+                                    <!-- Populated dynamically via JavaScript with zero escaping errors -->
+                                </ul>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -616,18 +629,16 @@
             const categories = new Set();
             taskList.forEach(t => { if (t.category) categories.add(t.category); });
             populateCategoryFilter(Array.from(categories));
+            populateCategoryDropdown(); // Synchronize custom combobox dropdown
             applyFiltersAndRender();
         }
 
         function populateCategoryFilter(categories) {
             const filterDropdown = document.getElementById('category-filter');
             const selectOptions = ['<option value="all">All Categories</option>'];
-            const datalist = document.getElementById('existing-categories');
-            let dlHtml = '';
 
             categories.sort().forEach(cat => {
                 selectOptions.push(`<option value="${cat}">${cat}</option>`);
-                dlHtml += `<option value="${cat}">`;
             });
 
             const currentVal = filterDropdown.value;
@@ -635,8 +646,71 @@
             if (Array.from(filterDropdown.options).some(o => o.value === currentVal)) {
                 filterDropdown.value = currentVal;
             }
-            if (datalist) datalist.innerHTML = dlHtml;
         }
+
+        // Custom Combobox Dropdown Populate Function
+        function populateCategoryDropdown() {
+            const list = document.getElementById('category-dropdown-list');
+            if (!list) return;
+
+            // Get unique sorted categories
+            const categories = new Set();
+            taskList.forEach(t => { if (t.category) categories.add(t.category); });
+            const sorted = Array.from(categories).sort();
+
+            list.innerHTML = '';
+
+            if (sorted.length === 0) {
+                const emptyLi = document.createElement('li');
+                emptyLi.className = "px-4 py-2.5 text-slate-500 italic";
+                emptyLi.textContent = "No existing categories";
+                list.appendChild(emptyLi);
+                return;
+            }
+
+            sorted.forEach(cat => {
+                const li = document.createElement('li');
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = "w-full text-left px-4 py-2.5 hover:bg-indigo-600/30 hover:text-indigo-300 transition-colors focus:outline-none font-semibold text-xs";
+                btn.textContent = cat;
+                
+                // Add event listener to prevent any template quote escaping bugs
+                btn.addEventListener('click', () => {
+                    selectCategoryDropdown(cat);
+                });
+                li.appendChild(btn);
+                list.appendChild(li);
+            });
+        }
+
+        function toggleCategoryDropdown(event) {
+            if (event) event.stopPropagation();
+            const dropdown = document.getElementById('category-dropdown');
+            if (dropdown) dropdown.classList.toggle('hidden');
+        }
+
+        function selectCategoryDropdown(categoryName) {
+            const categoryInput = document.getElementById('modal-task-category');
+            if (categoryInput) {
+                categoryInput.value = categoryName;
+            }
+            const dropdown = document.getElementById('category-dropdown');
+            if (dropdown) {
+                dropdown.classList.add('hidden');
+            }
+        }
+
+        // Dismiss Dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            const dropdown = document.getElementById('category-dropdown');
+            const categoryInput = document.getElementById('modal-task-category');
+            if (dropdown && !dropdown.classList.contains('hidden')) {
+                if (!e.target.closest('#category-dropdown') && e.target !== categoryInput && !e.target.closest('button[onclick="toggleCategoryDropdown(event)"]')) {
+                    dropdown.classList.add('hidden');
+                }
+            }
+        });
 
         function applyFiltersAndRender() {
             const searchQuery = document.getElementById('search-input').value.toLowerCase().trim();
@@ -862,6 +936,11 @@
             document.getElementById('modal-task-priority').value = 'Soon';
             document.getElementById('modal-task-category').value = '';
             document.getElementById('submit-btn').textContent = 'Sync to Sheet';
+            
+            // Close category dropdown in case it was left open
+            const dropdown = document.getElementById('category-dropdown');
+            if (dropdown) dropdown.classList.add('hidden');
+
             toggleAddTaskModal(true);
         }
 
@@ -874,6 +953,11 @@
             document.getElementById('modal-task-priority').value = priority;
             document.getElementById('modal-task-category').value = category;
             document.getElementById('submit-btn').textContent = 'Update Task';
+            
+            // Close category dropdown in case it was left open
+            const dropdown = document.getElementById('category-dropdown');
+            if (dropdown) dropdown.classList.add('hidden');
+
             toggleAddTaskModal(true);
         }
 
