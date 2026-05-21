@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Live Quest Planner (Write-Enabled)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #0b0f19;
+            color: #f1f5f9;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(30, 41, 59, 0.5) 0, transparent 50%),
+                radial-gradient(at 100% 0%, rgba(15, 23, 42, 0.8) 0, transparent 50%),
+                radial-gradient(at 50% 100%, rgba(17, 24, 39, 0.9) 0, transparent 100%);
+            background-attachment: fixed;
+            min-height: 100vh;
+        }
+        
+        /* Glassmorphism Styles */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.65);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .glass-card {
+            background: rgba(30, 41, 59, 0.45);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .glass-card:hover {
+            transform: translateY(-2px);
+            border-color: rgba(99, 102, 241, 0.3);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(99, 102, 241, 0.1);
+        }
+
+        /* Task Completed State */
+        .task-completed-text {
+            color: #64748b !important;
+            text-decoration: line-through;
+            opacity: 0.65;
+        }
+
+        .task-completed-card {
+            background: rgba(15, 23, 42, 0.3) !important;
+            border-color: rgba(255, 255, 255, 0.02) !important;
+            opacity: 0.75;
+        }
+
+        /* Checkbox styling */
+        .custom-checkbox {
+            appearance: none;
+            width: 1.4rem;
+            height: 1.4rem;
+            border: 2px solid rgba(255, 255, 255, 0.25);
+            border-radius: 6px;
+            display: grid;
+            place-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .custom-checkbox:checked {
+            background-color: #6366f1;
+            border-color: #6366f1;
+            box-shadow: 0 0 10px rgba(99, 102, 241, 0.5);
+        }
+
+        .custom-checkbox:checked::before {
+            content: "";
+            width: 0.65rem;
+            height: 0.35rem;
+            border-left: 2px solid white;
+            border-bottom: 2px solid white;
+            transform: rotate(-45deg) translate(1px, -1px);
+        }
+
+        /* Smooth custom scrollbars */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.5);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(99, 102, 241, 0.3);
+            border-radius: 6px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(99, 102, 241, 0.5);
+        }
+
+        /* Spinner */
+        .loader {
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-top: 2px solid #6366f1;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Priority Colors */
+        .priority-indicator-urgent { background: #f43f5e; box-shadow: 0 0 12px rgba(244, 63, 94, 0.4); }
+        .priority-indicator-soon { background: #f59e0b; box-shadow: 0 0 12px rgba(245, 158, 11, 0.4); }
+        .priority-indicator-later { background: #10b981; box-shadow: 0 0 12px rgba(16, 185, 129, 0.4); }
+    </style>
+</head>
+<body class="p-3 md:p-8">
+
+    <div class="max-w-7xl mx-auto space-y-6">
+        
+        <!-- Header Panel -->
+        <header class="glass-panel p-6 rounded-3xl flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative overflow-hidden">
+            <div class="absolute -right-16 -top-16 w-48 h-48 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none"></div>
+            <div class="absolute -left-16 -bottom-16 w-48 h-48 bg-emerald-600/10 rounded-full blur-3xl pointer-events-none"></div>
+
+            <div class="space-y-1 z-10">
+                <div class="flex items-center gap-2">
+                    <span class="px-2.5 py-1 text-xs font-bold tracking-widest bg-indigo-500/15 text-indigo-400 rounded-lg border border-indigo-500/20 uppercase">Interactive Panel</span>
+                    <span id="sync-pill" class="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold bg-emerald-500/15 text-emerald-400 rounded-lg border border-emerald-500/20">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                        REST API Synced
+                    </span>
+                </div>
+                <h1 class="text-3xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-100 to-indigo-200">
+                    Life Quest Planner
+                </h1>
+                <p class="text-slate-400 text-sm max-w-lg">
+                    Manage goals, habits, and career actions. All changes immediately sync to your Google Sheet.
+                </p>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-3 z-10 w-full md:w-auto">
+                <!-- Sync Status and Manual Refresh -->
+                <div class="flex items-center gap-3 bg-slate-900/60 px-4 py-2.5 rounded-2xl border border-slate-800 text-sm">
+                    <div id="loading-spinner" class="loader hidden"></div>
+                    <span id="status-text" class="text-slate-300 font-medium">Ready</span>
+                    <button onclick="fetchSheetData()" class="p-1.5 hover:bg-slate-800 rounded-lg text-indigo-400 hover:text-indigo-300 transition-colors" title="Sync from Sheet">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4.5 w-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"></path>
+                            <path d="M21 3v5h-5"></path>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Add Task Trigger -->
+                <button onclick="toggleAddTaskModal(true)" class="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-4 py-2.5 rounded-2xl shadow-lg shadow-indigo-600/20 transition-all text-sm flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    New Quest
+                </button>
+            </div>
+        </header>
+
+        <!-- Stats Matrix -->
+        <section class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="glass-panel p-4 rounded-2xl border border-slate-800">
+                <div class="flex justify-between items-start">
+                    <p class="text-xs font-bold uppercase tracking-wider text-slate-400">Total Quests</p>
+                    <span class="p-1 bg-indigo-500/10 text-indigo-400 rounded-lg">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
+                    </span>
+                </div>
+                <h3 id="stat-total" class="text-2xl font-extrabold mt-2 text-white">0</h3>
+            </div>
+            
+            <div class="glass-panel p-4 rounded-2xl border border-slate-800">
+                <div class="flex justify-between items-start">
+                    <p class="text-xs font-bold uppercase tracking-wider text-slate-400">Urgent Active</p>
+                    <span class="p-1 bg-rose-500/10 text-rose-400 rounded-lg">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                    </span>
+                </div>
+                <h3 id="stat-urgent" class="text-2xl font-extrabold mt-2 text-rose-500">0</h3>
+            </div>
+
+            <div class="glass-panel p-4 rounded-2xl border border-slate-800">
+                <div class="flex justify-between items-start">
+                    <p class="text-xs font-bold uppercase tracking-wider text-slate-400">Completed</p>
+                    <span class="p-1 bg-emerald-500/10 text-emerald-400 rounded-lg">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    </span>
+                </div>
+                <h3 id="stat-completed" class="text-2xl font-extrabold mt-2 text-emerald-400">0</h3>
+            </div>
+
+            <div class="glass-panel p-4 rounded-2xl border border-slate-800">
+                <div class="flex justify-between items-start">
+                    <p class="text-xs font-bold uppercase tracking-wider text-slate-400">Completion Rate</p>
+                    <span class="p-1 bg-sky-500/10 text-sky-400 rounded-lg">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" /><path stroke-linecap="round" stroke-linejoin="round" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" /></svg>
+                    </span>
+                </div>
+                <h3 id="stat-progress-pct" class="text-2xl font-extrabold text-sky-400 mt-2">0%</h3>
+            </div>
+        </section>
+
+        <!-- Progress bar -->
+        <div class="w-full bg-slate-900/80 rounded-full h-2 overflow-hidden border border-slate-800">
+            <div id="stat-progress-bar" class="bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500 h-full w-0 transition-all duration-500"></div>
+        </div>
+
+        <!-- Filters Toolbar -->
+        <section class="glass-panel p-4 rounded-2xl flex flex-col md:flex-row gap-4 items-center justify-between">
+            <div class="relative w-full md:max-w-md">
+                <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4.5 w-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                </span>
+                <input type="text" id="search-input" oninput="applyFiltersAndRender()" placeholder="Search tasks, categories..." class="w-full bg-slate-900/60 pl-10 pr-4 py-2.5 rounded-xl border border-slate-800 focus:border-indigo-500 outline-none text-sm transition-all text-slate-100 placeholder-slate-500">
+            </div>
+
+            <div class="flex items-center gap-3 w-full md:w-auto overflow-x-auto">
+                <div class="flex bg-slate-900/60 p-1 rounded-xl border border-slate-800 text-xs shrink-0">
+                    <button onclick="changeViewMode('board')" id="view-mode-board" class="px-3.5 py-1.5 rounded-lg font-bold transition-all text-white bg-indigo-600">
+                        Kanban Board
+                    </button>
+                    <button onclick="changeViewMode('tabs')" id="view-mode-tabs" class="px-3.5 py-1.5 rounded-lg font-bold transition-all text-slate-400 hover:text-white">
+                        Tabbed Panels
+                    </button>
+                </div>
+
+                <select id="category-filter" onchange="applyFiltersAndRender()" class="bg-slate-900/60 border border-slate-800 rounded-xl px-3 py-2 text-xs font-semibold text-slate-300 outline-none hover:border-slate-700">
+                    <option value="all">All Categories</option>
+                </select>
+
+                <select id="completion-filter" onchange="applyFiltersAndRender()" class="bg-slate-900/60 border border-slate-800 rounded-xl px-3 py-2 text-xs font-semibold text-slate-300 outline-none hover:border-slate-700">
+                    <option value="all">All States</option>
+                    <option value="pending">Incomplete</option>
+                    <option value="completed">Completed</option>
+                </select>
+            </div>
+        </section>
+
+        <!-- Status / Error Banner -->
+        <div id="status-banner" class="hidden glass-panel p-4 rounded-2xl border-l-4 border-l-rose-500 text-rose-300 flex items-center gap-3">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0 text-rose-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+            </svg>
+            <div>
+                <p class="font-bold text-sm" id="banner-title">Sync Error</p>
+                <p id="banner-text" class="text-xs text-rose-400/95">Details go here...</p>
+            </div>
+        </div>
+
+        <!-- Tab Selector (Tabbed mode) -->
+        <div id="tab-navigator" class="hidden glass-panel p-2 rounded-2xl flex justify-around items-center border border-slate-800">
+            <button onclick="setActiveTab('urgent')" id="tab-btn-urgent" class="flex-1 text-center py-2.5 rounded-xl font-bold text-sm transition-all text-rose-400 bg-rose-500/10 border border-rose-500/20">
+                🔴 Urgent
+            </button>
+            <button onclick="setActiveTab('soon')" id="tab-btn-soon" class="flex-1 text-center py-2.5 rounded-xl font-bold text-sm transition-all text-slate-400 hover:text-white">
+                🟡 Soon
+            </button>
+            <button onclick="setActiveTab('later')" id="tab-btn-later" class="flex-1 text-center py-2.5 rounded-xl font-bold text-sm transition-all text-slate-400 hover:text-white">
+                🟢 Later
+            </button>
+        </div>
+
+        <!-- Columns Grid -->
+        <main id="board-container" class="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+            
+            <!-- URGENT -->
+            <section id="column-urgent" class="space-y-4">
+                <div class="flex items-center justify-between bg-rose-950/20 p-3 rounded-2xl border border-rose-900/30">
+                    <div class="flex items-center gap-2.5">
+                        <span class="w-2.5 h-2.5 rounded-full priority-indicator-urgent"></span>
+                        <h2 class="text-base font-extrabold text-rose-300 uppercase tracking-wider">Urgent</h2>
+                    </div>
+                    <span id="badge-urgent" class="text-xs px-2 py-0.5 rounded-md font-extrabold bg-rose-500/20 text-rose-300">0</span>
+                </div>
+                <div id="list-urgent" class="space-y-4"></div>
+            </section>
+
+            <!-- SOON -->
+            <section id="column-soon" class="space-y-4">
+                <div class="flex items-center justify-between bg-amber-950/20 p-3 rounded-2xl border border-amber-900/30">
+                    <div class="flex items-center gap-2.5">
+                        <span class="w-2.5 h-2.5 rounded-full priority-indicator-soon"></span>
+                        <h2 class="text-base font-extrabold text-amber-300 uppercase tracking-wider">Soon</h2>
+                    </div>
+                    <span id="badge-soon" class="text-xs px-2 py-0.5 rounded-md font-extrabold bg-amber-500/20 text-amber-300">0</span>
+                </div>
+                <div id="list-soon" class="space-y-4"></div>
+            </section>
+
+            <!-- LATER -->
+            <section id="column-later" class="space-y-4">
+                <div class="flex items-center justify-between bg-emerald-950/20 p-3 rounded-2xl border border-emerald-900/30">
+                    <div class="flex items-center gap-2.5">
+                        <span class="w-2.5 h-2.5 rounded-full priority-indicator-later"></span>
+                        <h2 class="text-base font-extrabold text-emerald-300 uppercase tracking-wider">Later</h2>
+                    </div>
+                    <span id="badge-later" class="text-xs px-2 py-0.5 rounded-md font-extrabold bg-emerald-500/20 text-emerald-300">0</span>
+                </div>
+                <div id="list-later" class="space-y-4"></div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- Create Task Modal -->
+    <div id="add-task-modal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-4">
+        <div class="glass-panel w-full max-w-lg rounded-3xl p-6 border border-slate-800 shadow-2xl space-y-4">
+            <div class="flex justify-between items-center">
+                <h3 class="text-lg font-bold text-white">Create New Quest</h3>
+                <button onclick="toggleAddTaskModal(false)" class="text-slate-400 hover:text-white text-lg p-2">✕</button>
+            </div>
+
+            <form id="add-task-form" onsubmit="handleAddTaskSubmit(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Task Description</label>
+                    <input type="text" id="modal-task-name" required placeholder="e.g., Change Sparkasse status to student" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:border-indigo-500 outline-none text-slate-100 placeholder-slate-600">
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Priority</label>
+                        <select id="modal-task-priority" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-3 text-sm focus:border-indigo-500 outline-none text-slate-300">
+                            <option value="Urgent">🔴 Urgent</option>
+                            <option value="Soon" selected>🟡 Soon</option>
+                            <option value="Later">🟢 Later</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Category</label>
+                        <input type="text" id="modal-task-category" required placeholder="e.g., Personal Project" list="existing-categories" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-3 text-sm focus:border-indigo-500 outline-none text-slate-100 placeholder-slate-600">
+                        <datalist id="existing-categories"></datalist>
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-3 pt-2">
+                    <button type="button" onclick="toggleAddTaskModal(false)" class="px-5 py-2.5 rounded-xl border border-slate-800 text-slate-400 hover:text-white font-semibold text-sm">
+                        Cancel
+                    </button>
+                    <button type="submit" id="submit-btn" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm shadow-md transition-all">
+                        Sync to Sheet
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Your Deployed Apps Script REST Web App URL
+        const API_URL = 'https://script.google.com/macros/s/AKfycby4foWYRBXJ9J8ULRDzWAn5S4PrWdg-UC8HSPXvqJ_aQDxh-HUv1lnPLyDapzydH37a/exec';
+
+        // Dynamic State
+        let taskList = [];
+        let viewMode = 'board';
+        let activeTab = 'urgent';
+
+        // Fallback flag if network or deployment changes
+        let usingFallbackLocal = false;
+
+        // Fetch Google Sheets Data
+        async function fetchSheetData() {
+            setLoadingState(true, 'Fetching...');
+            try {
+                const response = await fetch(API_URL);
+                const result = await response.json();
+                
+                if (result.success && Array.isArray(result.data)) {
+                    taskList = result.data.map(item => ({
+                        rowIndex: item.rowIndex,
+                        name: item.task || '',
+                        priority: formatPriority(item.priority),
+                        category: capitalizeWord(item.category),
+                        done: !!item.done
+                    }));
+                    usingFallbackLocal = false;
+                    hideStatusBanner();
+                } else {
+                    throw new Error(result.error || 'Response parsed invalid structure.');
+                }
+            } catch (err) {
+                console.warn('API connection failed. Defaulting to local fallback.', err);
+                showStatusBanner(
+                    'Local Offline Mode Active', 
+                    'We are using cached local storage because the Google Apps Script REST API is unavailable or waiting for authorization. Please follow instructions to deploy and authorize the script.', 
+                    'rose'
+                );
+                loadFallbackLocalData();
+            } finally {
+                setLoadingState(false, 'Ready');
+                processAndRender();
+            }
+        }
+
+        // Write Operations: Add Task
+        async function addSheetTask(task, priority, category) {
+            if (usingFallbackLocal) {
+                addLocalFallbackTask(task, priority, category);
+                return;
+            }
+
+            setLoadingState(true, 'Adding...');
+            try {
+                const payload = {
+                    action: 'add',
+                    task: task,
+                    priority: priority,
+                    category: category,
+                    done: false
+                };
+
+                // Using standard form-urlencoded parameters or JSON string. 
+                // Using text/plain prevents CORS preflight issues in standard browsers calling Google Macro.
+                await fetch(API_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify(payload)
+                });
+
+                // Since 'no-cors' does not let us read the response, let's wait a short bit and refresh the board
+                showTemporaryBanner('Success', 'Quest added successfully to spreadsheet!', 'emerald');
+                setTimeout(fetchSheetData, 800);
+            } catch (err) {
+                console.error('Failed to write task', err);
+                showStatusBanner('Write Failed', 'Failed to communicate addition to Google App Script API.', 'rose');
+            } finally {
+                setLoadingState(false, 'Ready');
+            }
+        }
+
+        // Write Operations: Toggle Checkbox
+        async function toggleSheetTask(taskName, isChecked) {
+            // Update in UI instantly for snappiness
+            const task = taskList.find(t => t.name === taskName);
+            if (task) task.done = isChecked;
+            applyFiltersAndRender();
+
+            if (usingFallbackLocal) {
+                saveLocalFallbackData();
+                return;
+            }
+
+            setLoadingState(true, 'Syncing state...');
+            try {
+                const payload = {
+                    action: 'toggleStatus',
+                    task: taskName,
+                    done: isChecked
+                };
+
+                await fetch(API_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify(payload)
+                });
+                
+                showTemporaryBanner('Sync Completed', 'Spreadsheet updated', 'emerald');
+            } catch (err) {
+                console.error('Failed to toggle status', err);
+                showStatusBanner('Toggle Failed', 'Could not sync the status checkmark back to Google Sheets.', 'rose');
+            } finally {
+                setLoadingState(false, 'Ready');
+            }
+        }
+
+        // Write Operations: Delete Row
+        async function deleteSheetTask(taskName, rowIndex) {
+            if (usingFallbackLocal) {
+                taskList = taskList.filter(t => t.name !== taskName);
+                saveLocalFallbackData();
+                processAndRender();
+                return;
+            }
+
+            setLoadingState(true, 'Deleting...');
+            try {
+                const payload = {
+                    action: 'delete',
+                    task: taskName,
+                    rowIndex: rowIndex
+                };
+
+                await fetch(API_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify(payload)
+                });
+
+                showTemporaryBanner('Deleted', 'Task removed from spreadsheet.', 'amber');
+                setTimeout(fetchSheetData, 800);
+            } catch (err) {
+                console.error('Failed to delete row', err);
+                showStatusBanner('Delete Failed', 'Failed to sync deletion back to Google Sheets.', 'rose');
+            } finally {
+                setLoadingState(false, 'Ready');
+            }
+        }
+
+        // State & Local Storage Fallback Utilities
+        function loadFallbackLocalData() {
+            usingFallbackLocal = true;
+            const fallback = localStorage.getItem('quest_local_fallback');
+            if (fallback) {
+                taskList = JSON.parse(fallback);
+            } else {
+                // Populate default starter array matching original tasks
+                taskList = [
+                    { name: 'BSR glass and electronics garbage', priority: 'Urgent', category: 'Chore', done: true },
+                    { name: 'Research future gym, home fitness equipment', priority: 'Soon', category: 'Hobby', done: false },
+                    { name: 'Left side Pelvic tilt correction (hip flexor stretch protocol)', priority: 'Urgent', category: 'Personal Project', done: false },
+                    { name: 'Set up finance a finance / investment account', priority: 'Soon', category: 'Financial', done: false },
+                    { name: 'Switch Sparkasse status to student: collect my passport and actual enrollment papers!', priority: 'Urgent', category: 'Financial', done: false }
+                ];
+                saveLocalFallbackData();
+            }
+        }
+
+        function saveLocalFallbackData() {
+            localStorage.setItem('quest_local_fallback', JSON.stringify(taskList));
+        }
+
+        function addLocalFallbackTask(name, priority, category) {
+            taskList.push({
+                name: name,
+                priority: priority,
+                category: category,
+                done: false
+            });
+            saveLocalFallbackData();
+            processAndRender();
+        }
+
+        // Helpers
+        function formatPriority(val) {
+            if (!val) return 'Soon';
+            val = val.toString().trim().toLowerCase();
+            if (val.includes('urgent') || val.includes('now')) return 'Urgent';
+            if (val.includes('soon')) return 'Soon';
+            return 'Later';
+        }
+
+        function capitalizeWord(word) {
+            if (!word) return 'General';
+            return word.split(' ')
+                .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+                .join(' ');
+        }
+
+        function setLoadingState(isLoading, text) {
+            const spinner = document.getElementById('loading-spinner');
+            const statusText = document.getElementById('status-text');
+            if (spinner) {
+                isLoading ? spinner.classList.remove('hidden') : spinner.classList.add('hidden');
+            }
+            if (statusText) statusText.textContent = text;
+        }
+
+        function processAndRender() {
+            const categories = new Set();
+            taskList.forEach(t => { if (t.category) categories.add(t.category); });
+            populateCategoryFilter(Array.from(categories));
+            applyFiltersAndRender();
+        }
+
+        function populateCategoryFilter(categories) {
+            const filterDropdown = document.getElementById('category-filter');
+            const selectOptions = ['<option value="all">All Categories</option>'];
+            const datalist = document.getElementById('existing-categories');
+            let dlHtml = '';
+
+            categories.sort().forEach(cat => {
+                selectOptions.push(`<option value="${cat}">${cat}</option>`);
+                dlHtml += `<option value="${cat}">`;
+            });
+
+            const currentVal = filterDropdown.value;
+            filterDropdown.innerHTML = selectOptions.join('');
+            if (Array.from(filterDropdown.options).some(o => o.value === currentVal)) {
+                filterDropdown.value = currentVal;
+            }
+            if (datalist) datalist.innerHTML = dlHtml;
+        }
+
+        function applyFiltersAndRender() {
+            const searchQuery = document.getElementById('search-input').value.toLowerCase().trim();
+            const categoryFilter = document.getElementById('category-filter').value;
+            const completionFilter = document.getElementById('completion-filter').value;
+
+            const filtered = taskList.filter(task => {
+                const matchesSearch = task.name.toLowerCase().includes(searchQuery) || 
+                                      task.category.toLowerCase().includes(searchQuery) ||
+                                      task.priority.toLowerCase().includes(searchQuery);
+
+                const matchesCategory = categoryFilter === 'all' || task.category === categoryFilter;
+
+                let matchesCompletion = true;
+                if (completionFilter === 'pending') matchesCompletion = !task.done;
+                if (completionFilter === 'completed') matchesCompletion = task.done;
+
+                return matchesSearch && matchesCategory && matchesCompletion;
+            });
+
+            renderGrid(filtered);
+            updateStatsSummary();
+        }
+
+        function renderGrid(tasks) {
+            const lists = {
+                'Urgent': document.getElementById('list-urgent'),
+                'Soon': document.getElementById('list-soon'),
+                'Later': document.getElementById('list-later')
+            };
+
+            Object.values(lists).forEach(el => { if (el) el.innerHTML = ''; });
+            const columnCounts = { 'Urgent': 0, 'Soon': 0, 'Later': 0 };
+
+            const grouped = { 'Urgent': {}, 'Soon': {}, 'Later': {} };
+
+            tasks.forEach(task => {
+                const pri = task.priority;
+                const cat = task.category;
+                if (!grouped[pri]) return;
+                
+                if (!grouped[pri][cat]) {
+                    grouped[pri][cat] = [];
+                }
+                grouped[pri][cat].push(task);
+                columnCounts[pri]++;
+            });
+
+            document.getElementById('badge-urgent').textContent = columnCounts['Urgent'];
+            document.getElementById('badge-soon').textContent = columnCounts['Soon'];
+            document.getElementById('badge-later').textContent = columnCounts['Later'];
+
+            Object.keys(grouped).forEach(priority => {
+                const priorityGroup = grouped[priority];
+                const listContainer = lists[priority];
+                if (!listContainer) return;
+
+                const sortedCategories = Object.keys(priorityGroup).sort();
+
+                if (sortedCategories.length === 0) {
+                    listContainer.innerHTML = `
+                        <div class="p-6 text-center text-slate-500 rounded-2xl border border-dashed border-slate-800 text-xs">
+                            No remaining active items here
+                        </div>
+                    `;
+                    return;
+                }
+
+                sortedCategories.forEach(category => {
+                    const categoryTasks = priorityGroup[category];
+                    const cardSection = document.createElement('div');
+                    cardSection.className = "glass-card p-4 rounded-2xl space-y-3 relative overflow-hidden";
+                    
+                    let tagClasses = "text-indigo-400 bg-indigo-500/10 border-indigo-500/15";
+                    if (priority === 'Urgent') tagClasses = "text-rose-400 bg-rose-500/10 border-rose-500/15";
+                    if (priority === 'Soon') tagClasses = "text-amber-400 bg-amber-500/10 border-amber-500/15";
+                    if (priority === 'Later') tagClasses = "text-emerald-400 bg-emerald-500/10 border-emerald-500/15";
+
+                    cardSection.innerHTML = `
+                        <div class="flex items-center justify-between pb-1 border-b border-slate-800/60">
+                            <span class="px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wider ${tagClasses} border">
+                                ${category}
+                            </span>
+                            <span class="text-[10px] text-slate-500 font-semibold">${categoryTasks.length} Quest${categoryTasks.length > 1 ? 's' : ''}</span>
+                        </div>
+                        <ul class="space-y-2.5"></ul>
+                    `;
+
+                    const ul = cardSection.querySelector('ul');
+                    categoryTasks.forEach(task => {
+                        const li = document.createElement('li');
+                        li.className = `flex items-start gap-3 p-2.5 rounded-xl transition-all duration-200 hover:bg-slate-800/40 group ${task.done ? 'task-completed-card' : ''}`;
+                        li.innerHTML = `
+                            <div class="pt-0.5 shrink-0">
+                                <input type="checkbox" ${task.done ? 'checked' : ''} 
+                                       onchange="toggleSheetTask('${task.name.replace(/'/g, "\\'")}', this.checked)" 
+                                       class="custom-checkbox focus:outline-none">
+                            </div>
+                            <div class="flex-grow min-w-0">
+                                <p class="text-xs font-medium text-slate-200 leading-relaxed break-words group-hover:text-white transition-colors ${task.done ? 'task-completed-text' : ''}">
+                                    ${task.name}
+                                </p>
+                            </div>
+                            <button onclick="deleteSheetTask('${task.name.replace(/'/g, "\\'")}', ${task.rowIndex || 'null'})" class="opacity-0 group-hover:opacity-100 p-1 hover:text-rose-400 text-slate-500 transition-all shrink-0" title="Delete Task">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                                </svg>
+                            </button>
+                        `;
+                        ul.appendChild(li);
+                    });
+
+                    listContainer.appendChild(cardSection);
+                });
+            });
+
+            updateLayoutViews();
+        }
+
+        function updateLayoutViews() {
+            const container = document.getElementById('board-container');
+            const tabsNav = document.getElementById('tab-navigator');
+            
+            const colUrgent = document.getElementById('column-urgent');
+            const colSoon = document.getElementById('column-soon');
+            const colLater = document.getElementById('column-later');
+
+            if (viewMode === 'board') {
+                container.className = "grid grid-cols-1 md:grid-cols-3 gap-6 items-start";
+                tabsNav.classList.add('hidden');
+                colUrgent.classList.remove('hidden');
+                colSoon.classList.remove('hidden');
+                colLater.classList.remove('hidden');
+            } else {
+                container.className = "grid grid-cols-1 gap-6 items-start";
+                tabsNav.classList.remove('hidden');
+                
+                colUrgent.classList.add('hidden');
+                colSoon.classList.add('hidden');
+                colLater.classList.add('hidden');
+
+                if (activeTab === 'urgent') colUrgent.classList.remove('hidden');
+                if (activeTab === 'soon') colSoon.classList.remove('hidden');
+                if (activeTab === 'later') colLater.classList.remove('hidden');
+            }
+        }
+
+        function changeViewMode(mode) {
+            viewMode = mode;
+            const boardBtn = document.getElementById('view-mode-board');
+            const tabsBtn = document.getElementById('view-mode-tabs');
+
+            if (mode === 'board') {
+                boardBtn.className = "px-3.5 py-1.5 rounded-lg font-bold transition-all text-white bg-indigo-600";
+                tabsBtn.className = "px-3.5 py-1.5 rounded-lg font-bold transition-all text-slate-400 hover:text-white";
+            } else {
+                boardBtn.className = "px-3.5 py-1.5 rounded-lg font-bold transition-all text-slate-400 hover:text-white";
+                tabsBtn.className = "px-3.5 py-1.5 rounded-lg font-bold transition-all text-white bg-indigo-600";
+            }
+            updateLayoutViews();
+        }
+
+        function setActiveTab(tab) {
+            activeTab = tab;
+            const buttons = {
+                'urgent': document.getElementById('tab-btn-urgent'),
+                'soon': document.getElementById('tab-btn-soon'),
+                'later': document.getElementById('tab-btn-later')
+            };
+
+            Object.keys(buttons).forEach(k => {
+                const btn = buttons[k];
+                if (!btn) return;
+                if (k === tab) {
+                    if (k === 'urgent') {
+                        btn.className = "flex-1 text-center py-2.5 rounded-xl font-bold text-sm transition-all text-rose-400 bg-rose-500/10 border border-rose-500/20";
+                    } else if (k === 'soon') {
+                        btn.className = "flex-1 text-center py-2.5 rounded-xl font-bold text-sm transition-all text-amber-400 bg-amber-500/10 border border-amber-500/20";
+                    } else {
+                        btn.className = "flex-1 text-center py-2.5 rounded-xl font-bold text-sm transition-all text-emerald-400 bg-emerald-500/10 border border-emerald-500/20";
+                    }
+                } else {
+                    btn.className = "flex-1 text-center py-2.5 rounded-xl font-bold text-sm transition-all text-slate-400 hover:text-white";
+                }
+            });
+
+            updateLayoutViews();
+        }
+
+        function updateStatsSummary() {
+            const total = taskList.length;
+            const urgentCount = taskList.filter(t => t.priority === 'Urgent').length;
+            const completedCount = taskList.filter(t => t.done).length;
+            const pct = total > 0 ? Math.round((completedCount / total) * 100) : 0;
+
+            document.getElementById('stat-total').textContent = total;
+            document.getElementById('stat-urgent').textContent = urgentCount;
+            document.getElementById('stat-completed').textContent = completedCount;
+            document.getElementById('stat-progress-pct').textContent = `${pct}%`;
+            document.getElementById('stat-progress-bar').style.width = `${pct}%`;
+        }
+
+        function toggleAddTaskModal(show) {
+            const modal = document.getElementById('add-task-modal');
+            if (show) {
+                modal.classList.remove('hidden');
+                document.getElementById('modal-task-name').focus();
+            } else {
+                modal.classList.add('hidden');
+                document.getElementById('add-task-form').reset();
+            }
+        }
+
+        function handleAddTaskSubmit(e) {
+            e.preventDefault();
+            const nameInput = document.getElementById('modal-task-name');
+            const prioritySelect = document.getElementById('modal-task-priority');
+            const categoryInput = document.getElementById('modal-task-category');
+
+            const name = nameInput.value.trim();
+            const priority = prioritySelect.value;
+            const category = capitalizeWord(categoryInput.value.trim());
+
+            if (!name || !category) return;
+
+            addSheetTask(name, priority, category);
+            toggleAddTaskModal(false);
+        }
+
+        // Status Panel Messaging
+        function showStatusBanner(title, msg, type = 'rose') {
+            const banner = document.getElementById('status-banner');
+            const titleEl = document.getElementById('banner-title');
+            const textEl = document.getElementById('banner-text');
+
+            titleEl.textContent = title;
+            textEl.textContent = msg;
+            
+            if (type === 'rose') {
+                banner.className = "glass-panel p-4 rounded-2xl border-l-4 border-l-rose-500 text-rose-300 flex items-center gap-3";
+            } else if (type === 'amber') {
+                banner.className = "glass-panel p-4 rounded-2xl border-l-4 border-l-amber-500 text-amber-300 flex items-center gap-3";
+            } else {
+                banner.className = "glass-panel p-4 rounded-2xl border-l-4 border-l-emerald-500 text-emerald-300 flex items-center gap-3";
+            }
+            banner.classList.remove('hidden');
+        }
+
+        function hideStatusBanner() {
+            document.getElementById('status-banner').classList.add('hidden');
+        }
+
+        function showTemporaryBanner(title, msg, type) {
+            showStatusBanner(title, msg, type);
+            setTimeout(hideStatusBanner, 3000);
+        }
+
+        // Initialize App
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchSheetData();
+            if (window.innerWidth < 768) {
+                changeViewMode('tabs');
+            }
+        });
+    </script>
+</body>
+</html>
